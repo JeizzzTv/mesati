@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Rol del usuario que hace la petición, leído desde su ficha en "usuarios"
+    function rol() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
+    }
+    function esAdmin() {
+      return request.auth != null && rol() == 'admin';
+    }
+    function esTecnico() {
+      return request.auth != null && rol() == 'tecnico';
+    }
+
+    // ---------- Usuarios ----------
+    match /usuarios/{uid} {
+      // Cada quien lee su ficha; el admin lee todas (necesita la lista de técnicos)
+      allow read: if request.auth != null && (request.auth.uid == uid || esAdmin());
+
+      // Al registrarse solo puede crear su propia ficha y con rol "usuario"
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.rol == 'usuario';
+
+      // Nadie cambia su propio rol desde la app; solo el admin
+      allow update: if esAdmin();
+      allow delete: if false;
+    }
+
+    // ---------- Tickets ----------
+    match /tickets/{id} {
+      // Crear: a nombre propio y siempre en estado "Abierto"
+      allow create: if request.auth != null
+                    && request.resource.data.creadoPor == request.auth.uid
+                    && request.resource.data.estado == 'Abierto';
+
+      // Leer: el creador, el técnico asignado o el admin
+      allow read: if request.auth != null
+                  && (resource.data.creadoPor == request.auth.uid
+                      || resource.data.tecnicoAsignado == request.auth.uid
+                      || esAdmin());
+
+      // Modificar: el admin o el técnico al que está asignado
+      allow update: if esAdmin()
+                    || (esTecnico() && resource.data.tecnicoAsignado == request.auth.uid);
+
+      // Los tickets no se borran
+      allow delete: if false;
+    }
+  }
+}
