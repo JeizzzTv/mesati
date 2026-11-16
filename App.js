@@ -1,13 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  Alert,
-  TouchableOpacity,
-  useColorScheme,
-} from "react-native";
+import { View, Text, TextInput, StyleSheet, Alert, TouchableOpacity, useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   createUserWithEmailAndPassword,
@@ -21,6 +13,7 @@ import { temas } from "./src/tema";
 import Boton from "./src/Boton";
 import NuevoTicket from "./src/NuevoTicket";
 import ListaTickets from "./src/ListaTickets";
+import DetalleTicket from "./src/DetalleTicket";
 
 export default function App() {
   const [nombre, setNombre] = useState("");
@@ -30,14 +23,14 @@ export default function App() {
   const [usuario, setUsuario] = useState(null);
   const [ficha, setFicha] = useState(null); // nombre y rol guardados en Firestore
   const [pantalla, setPantalla] = useState("mis");
+  const [ticketAbierto, setTicketAbierto] = useState(null); // id del ticket que se está viendo
 
   // ---- Modo día / noche ----
-  const sistema = useColorScheme(); // el modo que tiene el teléfono
+  const sistema = useColorScheme();
   const [modo, setModo] = useState(sistema === "dark" ? "oscuro" : "claro");
-  const tema = temas[modo]; // los colores que se usan ahora
+  const tema = temas[modo];
   const e = crearEstilos(tema);
 
-  // Al abrir la app, recordar lo que el usuario eligió la última vez
   useEffect(() => {
     AsyncStorage.getItem("modoTema")
       .then((guardado) => {
@@ -60,11 +53,14 @@ export default function App() {
       setUsuario(u);
       if (!u) {
         setFicha(null);
+        setPantalla("mis");
+        setTicketAbierto(null);
         return;
       }
       const snap = await getDoc(doc(db, "usuarios", u.uid));
       if (snap.exists()) {
-        setFicha(snap.data());
+        const datos = snap.data();
+        setFicha({ ...datos, nombre: datos.nombre || u.email });
       } else {
         setFicha({ nombre: u.email, correo: u.email, rol: "usuario" });
       }
@@ -121,24 +117,51 @@ export default function App() {
           </View>
         </View>
 
-        <View style={e.tabs}>
-          <Tab texto="Mis tickets" activo={pantalla === "mis"} onPress={() => setPantalla("mis")} tema={tema} />
-          <Tab texto="Nuevo" activo={pantalla === "nuevo"} onPress={() => setPantalla("nuevo")} tema={tema} />
-          {ficha.rol === "admin" && (
-            <Tab texto="Todos" activo={pantalla === "todos"} onPress={() => setPantalla("todos")} tema={tema} />
-          )}
-        </View>
-
-        {pantalla === "mis" && <ListaTickets usuario={usuario} verTodos={false} tema={tema} />}
-        {pantalla === "nuevo" && (
-          <NuevoTicket
+        {ticketAbierto ? (
+          <DetalleTicket
+            ticketId={ticketAbierto}
             usuario={usuario}
             ficha={ficha}
             tema={tema}
-            alTerminar={() => setPantalla("mis")}
+            alVolver={() => setTicketAbierto(null)}
           />
+        ) : (
+          <>
+            <View style={e.tabs}>
+              <Tab texto="Mis tickets" activo={pantalla === "mis"} onPress={() => setPantalla("mis")} tema={tema} />
+              <Tab texto="Nuevo" activo={pantalla === "nuevo"} onPress={() => setPantalla("nuevo")} tema={tema} />
+              {ficha.rol === "tecnico" && (
+                <Tab
+                  texto="Asignados"
+                  activo={pantalla === "asignados"}
+                  onPress={() => setPantalla("asignados")}
+                  tema={tema}
+                />
+              )}
+              {ficha.rol === "admin" && (
+                <Tab texto="Todos" activo={pantalla === "todos"} onPress={() => setPantalla("todos")} tema={tema} />
+              )}
+            </View>
+
+            {pantalla === "mis" && (
+              <ListaTickets usuario={usuario} modo="mis" tema={tema} alAbrir={setTicketAbierto} />
+            )}
+            {pantalla === "nuevo" && (
+              <NuevoTicket
+                usuario={usuario}
+                ficha={ficha}
+                tema={tema}
+                alTerminar={() => setPantalla("mis")}
+              />
+            )}
+            {pantalla === "asignados" && (
+              <ListaTickets usuario={usuario} modo="asignados" tema={tema} alAbrir={setTicketAbierto} />
+            )}
+            {pantalla === "todos" && (
+              <ListaTickets usuario={usuario} modo="todos" tema={tema} alAbrir={setTicketAbierto} />
+            )}
+          </>
         )}
-        {pantalla === "todos" && <ListaTickets usuario={usuario} verTodos={true} tema={tema} />}
       </View>
     );
   }
@@ -195,7 +218,6 @@ export default function App() {
   );
 }
 
-// Pestaña de navegación
 function Tab({ texto, activo, onPress, tema }) {
   return (
     <TouchableOpacity
@@ -215,7 +237,6 @@ function Tab({ texto, activo, onPress, tema }) {
   );
 }
 
-// Los estilos se calculan con los colores del tema actual
 const crearEstilos = (t) =>
   StyleSheet.create({
     pantalla: { flex: 1, backgroundColor: t.fondo },

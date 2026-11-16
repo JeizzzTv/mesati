@@ -24,7 +24,7 @@ export default function NuevoTicket({ usuario, ficha, alTerminar, tema }) {
         categoria: categoria,
         estado: "Abierto",
         creadoPor: usuario.uid,
-        creadoPorNombre: ficha.nombre,
+        creadoPorNombre: ficha.nombre || ficha.correo || usuario.email,
         tecnicoAsignado: null,
         fechaCreacion: serverTimestamp(), // la hora la pone el servidor de Firebase
         fechaCierre: null,

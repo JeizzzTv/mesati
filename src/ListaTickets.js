@@ -1,18 +1,19 @@
 import { useState, useEffect } from "react";
-import { View, Text, FlatList, StyleSheet } from "react-native";
+import { View, Text, FlatList, StyleSheet, TouchableOpacity } from "react-native";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
 import { coloresEstado } from "./tema";
 
-export default function ListaTickets({ usuario, verTodos, tema }) {
+export default function ListaTickets({ usuario, modo, tema, alAbrir }) {
   const [tickets, setTickets] = useState([]);
   const e = crearEstilos(tema);
 
   useEffect(() => {
     const ref = collection(db, "tickets");
-    const consulta = verTodos ? ref : query(ref, where("creadoPor", "==", usuario.uid));
+    let consulta = ref; // modo "todos": sin filtro
+    if (modo === "mis") consulta = query(ref, where("creadoPor", "==", usuario.uid));
+    if (modo === "asignados") consulta = query(ref, where("tecnicoAsignado", "==", usuario.uid));
 
-    // onSnapshot: la lista se actualiza sola cuando cambia algo en la nube
     const cancelar = onSnapshot(
       consulta,
       (snap) => {
@@ -25,7 +26,7 @@ export default function ListaTickets({ usuario, verTodos, tema }) {
       (error) => console.log(error)
     );
     return cancelar;
-  }, [verTodos]);
+  }, [modo]);
 
   const total = tickets.length;
   const cerrados = tickets.filter((t) => t.estado === "Cerrado").length;
@@ -48,7 +49,7 @@ export default function ListaTickets({ usuario, verTodos, tema }) {
           </Text>
         }
         renderItem={({ item }) => (
-          <View style={e.tarjeta}>
+          <TouchableOpacity style={e.tarjeta} onPress={() => alAbrir(item.id)}>
             <View style={e.filaTitulo}>
               <Text style={e.titulo}>{item.titulo}</Text>
               <View style={[e.etiquetaEstado, { backgroundColor: coloresEstado[item.estado] || "#6b7280" }]}>
@@ -56,11 +57,12 @@ export default function ListaTickets({ usuario, verTodos, tema }) {
               </View>
             </View>
             <Text style={e.dato}>Categoría: {item.categoria}</Text>
-            {verTodos && <Text style={e.dato}>Creado por: {item.creadoPorNombre}</Text>}
+            {modo === "todos" ? <Text style={e.dato}>Creado por: {item.creadoPorNombre}</Text> : null}
+            {item.tecnicoNombre ? <Text style={e.dato}>Técnico: {item.tecnicoNombre}</Text> : null}
             <Text style={e.fecha}>
               {item.fechaCreacion ? item.fechaCreacion.toDate().toLocaleString() : "Guardando..."}
             </Text>
-          </View>
+          </TouchableOpacity>
         )}
       />
     </View>
